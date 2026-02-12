@@ -4,103 +4,37 @@
 <meta charset="UTF-8">
 <title>Стан батарей по стояках</title>
 
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
 <style>
-body {
-  font-family: Arial, sans-serif;
-  background: #f4f4f4;
-}
+body { font-family: Arial, sans-serif; background:#f4f4f4; }
+table { border-collapse: collapse; margin:20px auto; background:white; }
+th,td { border:1px solid #999; padding:6px 8px; text-align:center; min-width:36px; }
+th { background:#e0e0e0; }
+.floor { font-weight:bold; background:#f0f0f0; }
+.battery { cursor:pointer; border-radius:4px; font-weight:bold; }
+.inactive { background:#bdbdbd; }
+.hot { background:#4a90e2; color:white; }
+.cold { background:#e74c3c; color:white; }
+.empty { background:#fafafa; color:#aaa; }
 
-table {
-  border-collapse: collapse;
-  margin: 20px auto;
-  background: white;
+.legend, .info {
+  max-width:800px; margin:15px auto; background:white;
+  padding:12px; border-radius:6px; border:1px solid #ccc;
 }
-
-th, td {
-  border: 1px solid #999;
-  padding: 6px 8px;
-  text-align: center;
-  min-width: 36px;
-}
-
-th {
-  background: #e0e0e0;
-}
-
-.floor {
-  font-weight: bold;
-  background: #f0f0f0;
-}
-
-.battery {
-  cursor: pointer;
-  border-radius: 4px;
-  font-weight: bold;
-}
-
-.inactive {
-  background: #bdbdbd;
-  color: #333;
-}
-
-.hot {
-  background: #4a90e2;
-  color: white;
-}
-
-.cold {
-  background: #e74c3c;
-  color: white;
-}
-
-.empty {
-  background: #fafafa;
-  color: #aaa;
-}
-
-.legend {
-  width: 90%;
-  max-width: 700px;
-  margin: 10px auto;
-  display: flex;
-  gap: 15px;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.legend div {
-  padding: 6px 10px;
-  border-radius: 4px;
-  font-weight: bold;
-}
-
-.info {
-  max-width: 800px;
-  margin: 20px auto 40px;
-  background: white;
-  padding: 15px 20px;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-}
-
-.info h3 {
-  margin-top: 0;
-}
-
-.info ul {
-  padding-left: 20px;
-}
+.legend div { display:inline-block; padding:6px 10px; margin:4px; border-radius:4px; font-weight:bold; }
 </style>
 </head>
 <body>
 
 <div class="legend">
-  <div class="inactive">⚪ Неактивна батарея</div>
-  <div class="hot">🔵 Гаряча батарея</div>
-  <div class="cold">🔴 Холодна батарея</div>
+  <div class="inactive">⚪ Неактивна</div>
+  <div class="hot">🔵 Холодна</div>
+  <div class="cold">🔴 Гаряча</div>
 </div>
 
-<table>
+<table id="table">
 <tr>
   <th rowspan="2">Поверх</th>
   <th colspan="4">Ліве крило</th>
@@ -110,8 +44,43 @@ th {
   <th></th><th></th><th></th><th></th>
   <th></th><th></th><th></th><th></th><th></th>
 </tr>
+</table>
+
+<div class="info">
+<b>Як користуватись:</b><br>
+Натисніть на номер квартири, щоб змінити стан батареї.<br>
+⚪ → 🔵 → 🔴 → ⚪<br>
+Зміни миттєво бачать усі, хто відкрив сторінку.
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+  import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+
+  const firebaseConfig = {
+    ...
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+</script>
+
 
 <script>
+const firebaseConfig = {
+  apiKey: "AIzaSyD-XXXXXXXX",
+  authDomain: "heating-map.firebaseapp.com",
+  databaseURL: "https://heating-map-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "heating-map",
+  storageBucket: "heating-map.appspot.com",
+  messagingSenderId: "1234567890",
+  appId: "1:1234567890:web:abcdef123456"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const ref = db.ref("batteries");
+
 const floors = [
   [1,2,3,4,5,6],
   [7,8,9,10,11,12],
@@ -129,74 +98,38 @@ const floors = [
   [110,111,112,113,114,115,null,116,117]
 ];
 
-const table = document.querySelector("table");
-const states = ["inactive", "hot", "cold"];
+const table = document.getElementById("table");
+const states = ["inactive","hot","cold"];
 
-floors.forEach((row, i) => {
-  const tr = document.createElement("tr");
+floors.forEach((row,i)=>{
+  const tr=document.createElement("tr");
+  const f=document.createElement("td");
+  f.textContent=i+1; f.className="floor"; tr.appendChild(f);
 
-  const floorCell = document.createElement("td");
-  floorCell.textContent = i + 1;
-  floorCell.className = "floor";
-  tr.appendChild(floorCell);
-
-  for (let c = 0; c < 9; c++) {
-    const td = document.createElement("td");
-
-    if (row[c] === null) {
-      td.textContent = "—";
-      td.className = "empty";
-    } else if (row[c] !== undefined) {
-      td.textContent = row[c];
-      td.dataset.id = row[c];
-      td.className = "battery inactive";
-
-      const saved = localStorage.getItem("battery_" + row[c]);
-      if (saved) td.className = "battery " + saved;
-
-      td.onclick = () => toggle(td);
+  for(let c=0;c<9;c++){
+    const td=document.createElement("td");
+    if(row[c]==null){ td.textContent="—"; td.className="empty"; }
+    else if(row[c]){
+      td.textContent=row[c];
+      td.className="battery inactive";
+      td.onclick=()=>cycle(row[c]);
+      ref.child(row[c]).on("value",s=>{
+        if(s.exists()) td.className="battery "+s.val();
+      });
     }
-
     tr.appendChild(td);
   }
-
   table.appendChild(tr);
 });
 
-function toggle(cell) {
-  let current = states.find(s => cell.classList.contains(s));
-  let next = states[(states.indexOf(current) + 1) % states.length];
-  cell.className = "battery " + next;
-  localStorage.setItem("battery_" + cell.dataset.id, next);
+function cycle(id){
+  ref.child(id).get().then(s=>{
+    let cur=s.val()||"inactive";
+    let next=states[(states.indexOf(cur)+1)%states.length];
+    ref.child(id).set(next);
+  });
 }
 </script>
-
-<div class="info">
-  <h3>📘 Опис та як користуватись</h3>
-
-  <p>
-    Ця таблиця показує стан батарей опалення по стояках у будинку.
-    Кожна клітинка з номером квартири — це окрема батарея.
-  </p>
-
-  <ul>
-    <li><b>⚪ Сірий</b> — батарея неактивна / відключена / відсутня</li>
-    <li><b>🔵 Синій</b> — батарея холодна</li>
-    <li><b>🔴 Червоний</b> — батарея гаряча</li>
-  </ul>
-
-  <p>
-    Щоб змінити стан батареї — <b>натисніть на номер квартири</b>.
-    Кожне натискання перемикає стан по колу:
-    <br>
-    ⚪ → 🔵 → 🔴 → ⚪
-  </p>
-
-  <p>
-    Всі зміни <b>зберігаються автоматично</b> у браузері на цьому пристрої.
-    Після оновлення сторінки дані не зникають.
-  </p>
-</div>
 
 </body>
 </html>
