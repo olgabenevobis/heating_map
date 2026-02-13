@@ -70,6 +70,13 @@ th { background:#e0e0e0; }
 
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
+  set(ref(db, "meta/lastUpdate"), Date.now());
+onValue(ref(db, "meta/lastUpdate"), (snapshot) => {
+  ...
+});
+initializeApp(...)
+getDatabase(...)
+
 </script>
 
 
@@ -140,6 +147,7 @@ function cycle(id){
 
 </body>
 </html>
+
 
 
 
