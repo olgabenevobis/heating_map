@@ -19,30 +19,45 @@ th { background:#e0e0e0; }
 .cold { background:#e74c3c; color:white; }
 .empty { background:#fafafa; color:#aaa; }
 
-.legend, .info {
-  max-width:800px; margin:15px auto; background:white;
-  padding:12px; border-radius:6px; border:1px solid #ccc;
+.legend {
+  max-width:800px;
+  margin:15px auto;
+  background:white;
+  padding:12px;
+  border-radius:6px;
+  border:1px solid #ccc;
+  display:flex;
+  align-items:center;
+  gap:8px;
 }
-.legend div { display:inline-block; padding:6px 10px; margin:4px; border-radius:4px; font-weight:bold; }
+
+.legend div {
+  padding:6px 10px;
+  border-radius:4px;
+  font-weight:bold;
+}
+
+.last-update {
+  margin-left:auto;
+  font-size:14px;
+  color:#555;
+}
 </style>
 </head>
+
 <body>
 
 <div class="legend">
   <div class="inactive">⚪ Неактивна</div>
   <div class="hot">🔵 Холодна</div>
   <div class="cold">🔴 Гаряча</div>
+  <div id="lastUpdate" class="last-update">🕒 Останнє оновлення: —</div>
 </div>
 
 <table id="table">
 <tr>
-  <th rowspan="2">Поверх</th>
-  <th colspan="4">Ліве крило</th>
-  <th colspan="5">Праве крило</th>
-</tr>
-<tr>
-  <th></th><th></th><th></th><th></th>
-  <th></th><th></th><th></th><th></th><th></th>
+  <th>Поверх</th>
+  <th colspan="9">Квартири</th>
 </tr>
 </table>
 
@@ -53,20 +68,8 @@ th { background:#e0e0e0; }
 Зміни миттєво бачать усі, хто відкрив сторінку.
 </div>
 
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-  import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
-
-  const firebaseConfig = {
-    ...
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const db = getDatabase(app);
-</script>
-
-
 <script>
+/* 🔥 FIREBASE */
 const firebaseConfig = {
   apiKey: "AIzaSyD-XXXXXXXX",
   authDomain: "heating-map.firebaseapp.com",
@@ -79,8 +82,24 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
-const ref = db.ref("batteries");
+const batteriesRef = db.ref("batteries");
+const lastUpdateRef = db.ref("meta/lastUpdate");
 
+/* 🕒 ДАТА ОНОВЛЕННЯ */
+lastUpdateRef.on("value", snap => {
+  if (!snap.exists()) return;
+  document.getElementById("lastUpdate").textContent =
+    "🕒 Останнє оновлення: " + formatDate(new Date(snap.val()));
+});
+
+function formatDate(d){
+  const n=new Date();
+  if(d.toDateString()===n.toDateString())
+    return "сьогодні о " + d.toLocaleTimeString("uk-UA",{hour:"2-digit",minute:"2-digit"});
+  return d.toLocaleString("uk-UA");
+}
+
+/* 🏢 ДАНІ БУДИНКУ */
 const floors = [
   [1,2,3,4,5,6],
   [7,8,9,10,11,12],
@@ -98,23 +117,23 @@ const floors = [
   [110,111,112,113,114,115,null,116,117]
 ];
 
-const table = document.getElementById("table");
-const states = ["inactive","hot","cold"];
+const states=["inactive","hot","cold"];
+const table=document.getElementById("table");
 
+/* 🧱 ПОБУДОВА ТАБЛИЦІ */
 floors.forEach((row,i)=>{
   const tr=document.createElement("tr");
-  const f=document.createElement("td");
-  f.textContent=i+1; f.className="floor"; tr.appendChild(f);
-
+  tr.innerHTML=`<td class="floor">${i+1}</td>`;
   for(let c=0;c<9;c++){
     const td=document.createElement("td");
-    if(row[c]==null){ td.textContent="—"; td.className="empty"; }
-    else if(row[c]){
-      td.textContent=row[c];
+    const id=row[c];
+    if(!id){ td.textContent="—"; td.className="empty"; }
+    else{
+      td.textContent=id;
       td.className="battery inactive";
-      td.onclick=()=>cycle(row[c]);
-      ref.child(row[c]).on("value",s=>{
-        if(s.exists()) td.className="battery "+s.val();
+      td.onclick=()=>cycle(id);
+      batteriesRef.child(id).on("value",s=>{
+        td.className="battery "+(s.val()||"inactive");
       });
     }
     tr.appendChild(td);
@@ -122,11 +141,13 @@ floors.forEach((row,i)=>{
   table.appendChild(tr);
 });
 
+/* 🔁 КЛІК */
 function cycle(id){
-  ref.child(id).get().then(s=>{
-    let cur=s.val()||"inactive";
-    let next=states[(states.indexOf(cur)+1)%states.length];
-    ref.child(id).set(next);
+  batteriesRef.child(id).get().then(s=>{
+    const cur=s.val()||"inactive";
+    const next=states[(states.indexOf(cur)+1)%states.length];
+    batteriesRef.child(id).set(next);
+    lastUpdateRef.set(Date.now());
   });
 }
 </script>
